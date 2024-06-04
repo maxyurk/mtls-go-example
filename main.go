@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -18,7 +17,12 @@ func main() {
 
 	http.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "text/plain")
-		fmt.Fprint(rw, "Hello World")
+		if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+			clientCert := r.TLS.PeerCertificates[0]
+			_, _ = rw.Write([]byte("Hello, secure client! Your cert was issued by " + clientCert.Issuer.CommonName))
+		} else {
+			_, _ = rw.Write([]byte("Hello, client connected without a certificate!"))
+		}
 	})
 
 	server := &http.Server{Addr: ":8443"}
@@ -44,13 +48,13 @@ func createServerWithMTLS() *http.Server {
 	clientCertPool.AppendCertsFromPEM(clientCACert)
 
 	tlsConfig := &tls.Config{
-		ClientAuth:               tls.RequireAndVerifyClientCert,
+		ClientAuth:               tls.VerifyClientCertIfGiven,
 		ClientCAs:                clientCertPool,
 		PreferServerCipherSuites: true,
 		MinVersion:               tls.VersionTLS12,
 	}
 
-	tlsConfig.BuildNameToCertificate()
+	//tlsConfig.BuildNameToCertificate()
 
 	return &http.Server{
 		Addr:      ":8443",
